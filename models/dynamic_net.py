@@ -99,7 +99,7 @@ class DynamicNet(object):
 
         prediction = None
 
-        if self.dataset == "CREMAD" or self.dataset == 'AVE':
+        if self.dataset == "CREMAD" or self.dataset == 'AVE'  or self.dataset == 'AVMNIST' or self.dataset == 'VGGSound':
             spec, image = data
             model_input_map = {
                 'audio': spec,
@@ -137,7 +137,7 @@ class DynamicNet(object):
     def forward_grad(self, data):
         prediction = None
 
-        if self.dataset == "CREMAD" or self.dataset == 'AVE':
+        if self.dataset == "CREMAD" or self.dataset == 'AVE' or self.dataset == 'AVMNIST' or self.dataset == 'VGGSound':
             spec, image = data
             model_input_map = {
                 'audio': spec,

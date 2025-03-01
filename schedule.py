@@ -19,7 +19,7 @@ def schedule_model(stage, dataset):
                 return "img"
             else:
                 return "mesh"
-        elif dataset == "CREMAD" or dataset == 'AVE':
+        elif dataset == "CREMAD" or dataset == 'AVE' or dataset == 'AVMNIST' or dataset == 'VGGSound':
             if stage == 0:
                 return "audio"
             elif stage == 1:
@@ -47,7 +47,7 @@ def schedule_model(stage, dataset):
             elif stage % 3 == 2:
                 return "audio"
     
-        elif dataset == "CREMAD" or dataset == 'AVE' or dataset == 'MOSEI_RAW':
+        elif dataset == "CREMAD" or dataset == 'AVE' or dataset == 'MOSEI_RAW' or dataset == 'AVMNIST' or dataset == 'VGGSound':
             if stage % 2 == 0:
                 #return "visual"
                 return "audio"

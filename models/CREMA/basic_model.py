@@ -10,6 +10,10 @@ class AudioNet(nn.Module):
         self.audio_net = resnet18(modality="audio")
         if dataset == 'CREMAD':
             n_classes = 6
+        elif dataset == 'AVMNIST':
+            n_classes = 10
+        elif dataset == 'VGGSound':
+            n_classes = 309
         elif dataset == 'AVE':
             n_classes = 28
         output_dim = n_classes
@@ -29,9 +33,16 @@ class AudioNet(nn.Module):
 class VisualNet(nn.Module):
     def __init__(self, dataset,latent_in = 512):
         super(VisualNet, self).__init__()
-        self.visual_net = resnet18(modality="visual")
+        if dataset == 'AVMNIST':
+            self.visual_net = resnet18(modality="image")
+        else:
+            self.visual_net = resnet18(modality="visual")
         if dataset == 'CREMAD':
             n_classes  = 6
+        elif dataset == 'AVMNIST':
+            n_classes = 10
+        elif dataset == 'VGGSound':
+            n_classes = 309
         elif dataset == 'AVE':
             n_classes = 28
         output_dim = n_classes

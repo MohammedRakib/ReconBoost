@@ -1,0 +1,15 @@
+# For AV_MNNIST
+CUDA_VISIBLE_DEVICES=2 python train.py --dataset AVMNIST --n_class 10 --batch_size 64 --boost_rate 1.0 --n_worker 8 --epochs_per_stage 1 --correct_epoch 1 --use_lr True  --m_lr 0.01 --e_lr 0.01 --weight1 5.0 --weight2 1.0
+
+
+# For VGGSound
+CUDA_VISIBLE_DEVICES=2 python train.py --dataset VGGSound --n_class 309 --batch_size 64 --boost_rate 1.0 --n_worker 8 --epochs_per_stage 1 --correct_epoch 1 --use_lr True  --m_lr 0.01 --e_lr 0.01 --weight1 5.0 --weight2 1.0
+
+
+
+# For AV_MNNIST with pretraining
+CUDA_VISIBLE_DEVICES=2 python train.py --dataset AVMNIST --n_class 10 --batch_size 64 --boost_rate 1.0 --n_worker 8 --epochs_per_stage 4 --correct_epoch 4 --use_lr True  --m_lr 0.01 --e_lr 0.01 --weight1 5.0 --weight2 1.0 --use_pretrain
+
+
+# For VGGSound with pretraining
+CUDA_VISIBLE_DEVICES=1 python train.py --dataset VGGSound --n_class 309 --batch_size 64 --boost_rate 1.0 --n_worker 8 --epochs_per_stage 1 --correct_epoch 1 --use_lr True  --m_lr 0.01 --e_lr 0.01 --weight1 5.0 --weight2 1.0 --use_pretrain

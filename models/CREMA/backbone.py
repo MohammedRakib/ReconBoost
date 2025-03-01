@@ -81,6 +81,9 @@ class ResNet(nn.Module):
         elif modality == 'visual':
             self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3,
                                    bias=False)
+        elif modality =='image':
+            self.conv1 = nn.Conv2d(1,self.inplanes, kernel_size=7, stride=2, padding=3,
+                                   bias=False)
         else:
             raise NotImplementedError('Incorrect modality, should be audio or visual but got {}'.format(modality))
         self.bn1 = norm_layer(self.inplanes)

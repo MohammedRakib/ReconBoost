@@ -1,9 +1,26 @@
 from pathlib import Path
 from random import shuffle
+from collections import OrderedDict
 
+def fix_state_dict_keys(state_dict, modality, dataset=None):
+    new_state_dict = OrderedDict()
+    replace_prefix = "audio_net." if modality == "audio" else "visual_net."  # Set correct prefix
+
+    for k, v in state_dict.items():
+        if dataset == "AVMNIST":
+            new_key = k.replace("module.net.", replace_prefix)  # Replace with correct modality prefix
+            new_key = new_key.replace("module.", "")  # Remove remaining 'module.' prefix if any
+        elif dataset == "VGGSound":
+            new_key = k.replace("net.", replace_prefix)  # Replace with correct modality prefix
+        else:
+            raise NotImplementedError(f"Dataset {dataset} is not implemented.")
+        new_key = new_key.replace("classifier", "fc")  # Rename classifier -> fc
+        new_state_dict[new_key] = v
+    return new_state_dict
 
 def check_status(stage):
     if stage < 1001:
+    # if stage < 10:
         return True
     return False
 

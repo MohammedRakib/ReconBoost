@@ -4,21 +4,11 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
-import torchvision.models as models
 import argparse
 import torch.optim as optim
 import time
-import json
-import scipy
 import random
 from torch.utils.data import DataLoader
-import sys
-import torch.nn.functional as F
-from sklearn.preprocessing import normalize
-from scipy.spatial.distance import cdist
-import warnings
-from pathlib import Path
 
 ## models
 ### CREMA-D,AVE
@@ -28,6 +18,8 @@ from models.MView40.image import FeatureNet
 
 ## dataloader
 from loaders.CramedDataset import CramedDataset
+from loaders.AVMNIST import AVMNISTDataset
+from loaders.VGGSound import VGGSound
 from loaders.AVEDataset import AVEDataset
 from loaders.MView40.train_dataset import MView_train
 from loaders.MView40.test_dataset import MView_test
@@ -41,12 +33,17 @@ from schedule import schedule_model
 from torch.utils.tensorboard import SummaryWriter
 
 from utils import AverageMeter, res2tab, acc_score, map_score
-from utils import check_status
+from utils import check_status, fix_state_dict_keys
 
 import argparse
-# os environment
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
-device = torch.device("cuda")
+
+# Check if CUDA is available
+if torch.cuda.is_available():
+    device = torch.device("cuda")  # Use the first available CUDA device
+    print(f"Using GPU: {torch.cuda.get_device_name(torch.cuda.current_device())}")
+else:
+    device = torch.device("cpu")  # Fallback to CPU
+    print("CUDA not available, using CPU.")
 
 def parse_args():
     parser = argparse.ArgumentParser(description="ICML-2024-ReconBoost")
@@ -77,9 +74,9 @@ def parse_args():
     parser.add_argument('--alpha',type=float,default=0.5)
 
     #### save dir & tensorboard dir
-    parser.add_argument('--ckpt_dir',type=str,default='/data/huacong/MN40/grownet/cache/ckpt')
+    parser.add_argument('--ckpt_dir',type=str,default='/home/rakib/ReconBoost/ckpt')
     parser.add_argument('--use_tensorboard',type=bool,default=True)
-    parser.add_argument('--tensorboard_dir',type=str,default='/data/huacong/MN40/grownet/cache/tensorboard') 
+    parser.add_argument('--tensorboard_dir',type=str,default='/home/rakib/ReconBoost/tensorboard') 
 
     ################# test_mode ########################
     parser.add_argument('--ensemble_ckpt_path',type=str,default='')
@@ -100,9 +97,10 @@ def setup_seed():
 def init_model():
     return random.random()
 
-def init_pretrain(model,ckpt):
+def init_pretrain(args, model, ckpt, modality=None):
     model_ckpt = torch.load(ckpt)
-    pretrained_dict = model_ckpt['model']
+    model_ckpt = fix_state_dict_keys(model_ckpt, modality, args.dataset)
+    pretrained_dict = model_ckpt
     model.load_state_dict(pretrained_dict)
     return model
 
@@ -112,10 +110,13 @@ def test(args,data_loader, net_ensemble, stage = 0):
     st = time.time()
 
     for i, data_label in enumerate(data_loader):
-        if args.dataset == 'CREMAD' or args.dataset == 'AVE':
+        if args.dataset == 'CREMAD' or args.dataset == 'AVE' or args.dataset == "AVMNIST" or args.dataset == "VGGSound":
             spec, image, lbl = data_label
             spec = spec.cuda()
-            spec = spec.unsqueeze(1).float()
+            if args.dataset != "AVMNIST":
+                spec = spec.unsqueeze(1).float()
+            else:
+                spec = spec.float()
             image = image.to(device)
             image = image.float()
             lbl = lbl.cuda()
@@ -184,6 +185,41 @@ def main(args,this_task):
         model_audio.cuda()    
         model_visual.cuda()
 
+    elif args.dataset == 'AVMNIST':
+        train_data = AVMNISTDataset(mode="train")
+        test_data = AVMNISTDataset(mode='test')
+                
+        model_audio = AudioNet(dataset='AVMNIST')
+        model_visual = VisualNet(dataset='AVMNIST')
+
+        audio_ckpt_path = "/home/rakib/MM-KD/checkpoints/AVMNIST/teacher/best_model_s999_aT_AVMNIST_teacher_epoch_152_acc_42.74.pth"
+        visual_ckpt_path = "/home/rakib/MM-KD/checkpoints/AVMNIST/teacher/best_model_s999_vT_AVMNIST_teacher_epoch_91_acc_65.59.pth"
+        
+
+        if args.use_pretrain:
+            model_audio = init_pretrain(args,model_audio,audio_ckpt_path, modality="audio")
+            model_visual = init_pretrain(args,model_visual,visual_ckpt_path, modality="visual")
+
+        model_audio.cuda()
+        model_visual.cuda()
+    
+    elif args.dataset == 'VGGSound':
+        train_data = VGGSound(mode="train")
+        test_data = VGGSound(mode='test')
+        
+        model_audio = AudioNet(dataset='VGGSound')
+        model_visual = VisualNet(dataset='VGGSound')
+
+        audio_ckpt_path = "/home/rakib/MM-KD/checkpoints/VGGSound/teacher/best_model_s999_aT_VGGSound_teacher_epoch_274_acc_43.39.pth"
+        visual_ckpt_path = "/home/rakib/MM-KD/checkpoints/VGGSound/teacher/best_model_s999_vT_VGGSound_teacher_epoch_272_acc_32.32.pth"
+
+        if args.use_pretrain:
+            model_audio = init_pretrain(args,model_audio,audio_ckpt_path, modality="audio")
+            model_visual = init_pretrain(args,model_visual,visual_ckpt_path, modality="visual")
+
+        model_audio.cuda()    
+        model_visual.cuda()
+
     elif args.dataset == 'AVE':
         train_data = AVEDataset(dataset_dir=args.dataset_path,mode="train")
         test_data = AVEDataset(dataset_dir=args.dataset_path,mode='test')
@@ -219,6 +255,10 @@ def main(args,this_task):
             model_img1.load_state_dict(torch.load(img_ckpt_path))
             model_img2.load_state_dict(torch.load(img_ckpt_path))
 
+    # FOR DEBUGGING ONLY
+    # print("\n WARNING: Testing on a small dataset for student \n")
+    # train_data = torch.utils.data.Subset(train_data, range(100))
+    # test_data = torch.utils.data.Subset(test_data, range(100))
 
     train_loader = DataLoader(dataset=train_data,
                             batch_size=args.batch_size,
@@ -241,7 +281,7 @@ def main(args,this_task):
     
 
     if args.use_pretrain:
-        if args.dataset == 'AVE' or args.dataset == 'CREMAD':
+        if args.dataset == 'AVE' or args.dataset == 'CREMAD' or args.dataset == 'AVMNIST' or args.dataset == 'VGGSound':
             net_ensemble.add(model = model_audio,model_name='audio')
             net_ensemble.add(model = model_visual,model_name='visual')
         elif args.dataset == 'MView40':
@@ -264,7 +304,7 @@ def main(args,this_task):
             modality_lr = args.m_lr
             ensemble_lr = args.e_lr
        
-        if args.dataset == 'CREMAD' or args.dataset == 'AVE':
+        if args.dataset == 'CREMAD' or args.dataset == 'AVE' or args.dataset == "AVMNIST" or args.dataset == "VGGSound":
             if model_name == 'audio':
                 model = model_audio ## current model
                 pre_model = model_visual
@@ -303,10 +343,13 @@ def main(args,this_task):
 
         for epoch in range(args.epochs_per_stage):
             for i, data_label in enumerate(train_loader):
-                if args.dataset == 'CREMAD' or args.dataset == 'AVE':
+                if args.dataset == 'CREMAD' or args.dataset == 'AVE' or args.dataset == "AVMNIST" or args.dataset == "VGGSound":
                     spec, image, lbl = data_label
                     spec = spec.cuda()
-                    spec = spec.unsqueeze(1).float()
+                    if args.dataset != "AVMNIST":
+                        spec = spec.unsqueeze(1).float()
+                    else:
+                        spec = spec.float()
                     image = image.cuda()
                     image = image.float()
                     lbl = lbl.cuda()
@@ -371,10 +414,13 @@ def main(args,this_task):
             optimizer_correct = optim.SGD(net_ensemble.parameters(), ensemble_lr, momentum=0.9, weight_decay=5e-4)
             for epoch in range(args.correct_epoch):
                 for i, data_label in enumerate(train_loader):
-                    if args.dataset == 'CREMAD' or args.dataset == 'AVE':
+                    if args.dataset == 'CREMAD' or args.dataset == 'AVE' or args.dataset == "AVMNIST" or args.dataset == "VGGSound":
                         spec, image, lbl = data_label
                         spec = spec.cuda()
-                        spec = spec.unsqueeze(1).float()
+                        if args.dataset != "AVMNIST":
+                            spec = spec.unsqueeze(1).float()
+                        else:
+                            spec = spec.float()
                         image = image.cuda()
                         image = image.float()
                         lbl = lbl.cuda()
@@ -420,7 +466,7 @@ def main(args,this_task):
         if stage >= 3 and acc > best_acc: 
             best_acc = float(acc)
             uni_model_name = 'uni_encoder_of_best_model_stage_{}_acc_{}.pth'.format(stage, acc)
-            if args.dataset == 'CREMAD' or args.dataset == 'AVE':
+            if args.dataset == 'CREMAD' or args.dataset == 'AVE' or args.dataset == "AVMNIST" or args.dataset == "VGGSound":
                 saved_dict = {'saved_stage':stage,
                         'acc':acc,
                         'model_audio':model_audio.state_dict(),
@@ -446,7 +492,7 @@ def main(args,this_task):
             if args.dataset == 'AVE' and stage == 40:
                 modality_lr = modality_lr * 0.5
                 ensemble_lr = ensemble_lr * 0.5
-            if args.dataset == 'CREMAD' and stage !=0 and stage % 30 == 0:
+            if args.dataset == 'CREMAD' or args.dataset == "AVMNIST" or args.dataset == "VGGSound" and stage !=0 and stage % 30 == 0:
                 modality_lr = modality_lr * 0.1
                 ensemble_lr = ensemble_lr * 0.1
     
